@@ -19,13 +19,13 @@ float const home_position[6] = {SmartServoClass::MAX_ANGLE / 2.0f,
                                 SmartServoClass::MAX_ANGLE / 2.0f,
                                 SmartServoClass::MAX_ANGLE / 2.0f,
                                 90.0f};
-// static const char * btnm_map[] = {"Move", "\0"};
+static const char * btnm_map[] = {"Move", "\0"};
 
 /**************************************************************************************
  * GLOBAL VARIABLES
  **************************************************************************************/
 
-// bool move_joint = false;
+bool move_joint = false;
 
 /**************************************************************************************
  * FUNCTIONS
@@ -61,7 +61,6 @@ void customMenu()
   Braccio.lvgl_unlock();
 
   Braccio.connectJoystickTo(btnm1);
-}
 
 /**************************************************************************************
  * SETUP/LOOP
@@ -86,10 +85,10 @@ void loop()
 {
   if (move_joint)
   {
+    Braccio.setAngularVelocity(360.0f);
     Braccio.move(4).to((SmartServoClass::MAX_ANGLE / 2.0f) - 45.0f);
     delay(2000);
     Braccio.move(4).to((SmartServoClass::MAX_ANGLE / 2.0f) + 45.0f);
     delay(2000);
   }
 }
-
