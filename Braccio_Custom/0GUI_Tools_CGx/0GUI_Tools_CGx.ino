@@ -15,7 +15,7 @@
  **************************************************************************************/
 
 #include <Braccio++.h>
-#include <FABRIK2D.h>
+#include <InverseK.h>
 
 /**************************************************************************************
  * GLOBAL CONSTANTS
@@ -38,16 +38,25 @@ bool isPrinting = true;
 bool move_joint = false;
 
 int lengths[] = { 200, 200, 100 };  // 3DOF arm where shoulder to elbow is 225mm, elbow to wrist is 150mm and wrist to end effector is 100mm.
-Fabrik2D fabrik2D(4, lengths);      // This arm has 4 joints; one in the origin, the elbow, the wrist and the end effector.
 
 // list of locations with x,y,z
 const int amountOfLocations = 4;
-const int locations[amountOfLocations][3] = {{100, 100, 100}, {200, 200, 200}, {-100, 100, 100}, {-200, 200, 200}};
+const int locations[amountOfLocations][3] = {{0,0,0}, {300, 0, 0}, {0, 300, 0}, {0, 0, 300}};
 int i = 0;
 
 /**************************************************************************************
  * FUNCTIONS
  **************************************************************************************/
+
+// Quick conversion from the Braccio angle system to radians
+float b2a(float b){
+  return b / 180.0 * PI - HALF_PI;
+}
+
+// Quick conversion from radians to the Braccio angle system
+float a2b(float a) {
+  return (a + HALF_PI) * 180 / PI;
+}
 
 // a generic conversion function that takes the fabrik angle and the min and max of the braccio range
 float convertToBraccio(float fabrikAngle, float braccioMin, float braccioMax) {
@@ -74,12 +83,15 @@ float convertToBraccioShoulder(float fabrikAngle) {
 float convertToBraccioElbow(float fabrikAngle) {
   float braccioMin = 47.33;
   float braccioMax = 261.84;
+  float elbowOffset = 90.0;
+  return convertToBraccio(fabrikAngle + elbowOffset, braccioMin, braccioMax);
 }
 
 float convertToBraccioWristPitch(float fabrikAngle) {
   float braccioMin = 38.35;
   float braccioMax = 271.77;
-  return convertToBraccio(fabrikAngle, braccioMin, braccioMax);
+  float wristPitchOffset = 90.0;
+  return convertToBraccio(fabrikAngle + wristPitchOffset, braccioMin, braccioMax);
 }
 
 float convertToBraccioWristRoll(float fabrikAngle) {
@@ -123,68 +135,60 @@ void customMenu() {
   Braccio.connectJoystickTo(btnm1);
 }
 
-void fabrik_setup() {
-  if (isPrinting) {
-    Serial.print("pos");
-    Serial.print("\t\t\t");
-    Serial.print("angB");
-    Serial.print("\t");
-    Serial.print("ang0");
-    Serial.print("\t");
-    Serial.print("ang1");
-    Serial.print("\t");
-    Serial.print("ang2");
-    Serial.print("\t");
-    Serial.print("x0");
-    Serial.print("\t");
-    Serial.print("y0");
-    Serial.print("\t");
-    Serial.print("x1");
-    Serial.print("\t");
-    Serial.print("y1");
-    Serial.print("\t");
-    Serial.print("x2");
-    Serial.print("\t");
-    Serial.print("y2");
-    Serial.print("\t");
-    Serial.print("x3");
-    Serial.print("\t");
-    Serial.println("y3");
+void CGx_setup() {
+  // Setup the lengths and rotation limits for each link
+  Link base, shoulder, elbow, wristPitch;
+
+
+  base.init(0, b2a(0.0), b2a(360.0));
+  shoulder.init(200, b2a(0.0), b2a(180.0));
+  elbow.init(200, b2a(0.0), b2a(180.0));
+  wristPitch.init(200, b2a(0.0), b2a(180.0));
+
+  // Attach the links to the inverse kinematic model
+  InverseK.attach(base, shoulder, elbow, wristPitch);
+
+  float a0, a1, a2, a3;
+
+  // InverseK.solve() return true if it could find a solution and false if not.
+
+  // Calculates the angles without considering a specific approach angle
+  // InverseK.solve(x, y, z, a0, a1, a2, a3)
+  if(InverseK.solve(300.0, 0.0, 0.0, a0, a1, a2, a3)) {
+    Serial.print(a2b(a0)); Serial.print(',');
+    Serial.print(a2b(a1)); Serial.print(',');
+    Serial.print(a2b(a2)); Serial.print(',');
+    Serial.println(a2b(a3));
+  } else {
+    Serial.println("No solution found!");
+    Serial.print(a2b(a0)); Serial.print(',');
+    Serial.print(a2b(a1)); Serial.print(',');
+    Serial.print(a2b(a2)); Serial.print(',');
+    Serial.println(a2b(a3));
   }
 
-
-  // Set tolerance to 0.5mm. If reachable, the end effector will approach
-  // the target with this tolerance
-  fabrik2D.setTolerance(0.5);
+  // Calculates the angles considering a specific approach angle
+  // InverseK.solve(x, y, z, a0, a1, a2, a3, phi)
+  if(InverseK.solve(300.0, 0.0, 0.0, a0, a1, a2, a3, b2a(90.0))) {
+    Serial.print(a2b(a0)); Serial.print(',');
+    Serial.print(a2b(a1)); Serial.print(',');
+    Serial.print(a2b(a2)); Serial.print(',');
+    Serial.println(a2b(a3));
+  } else {
+    Serial.println("No solution found!");
+    Serial.print(a2b(a0)); Serial.print(',');
+    Serial.print(a2b(a1)); Serial.print(',');
+    Serial.print(a2b(a2)); Serial.print(',');
+    Serial.println(a2b(a3));
+  }
 }
 
-void fabrik_loop() {
+void CGx_loop() {
   if (isDone)
     return;
   int x = locations[i][0];
   int y = locations[i][1];
   int z = locations[i][2];
-
-  // Move from 0 to 50 in the z axis
-  // if (z < 0) {
-  //   toggle_z = 0;
-  //   z = 0;
-  // } else if (z > 50) {
-  //   isDone = true;
-  //   toggle_z = 1;
-  //   z = 50;
-  // }
-
-  // // Move from 50 to 150 in the x axis
-  // if (x < 50) {
-  //   toggle_x = 0;
-  //   x = 50;
-  // } else if (x > 150) {
-  //   toggle_x = 1;
-  //   x = 150;
-  // }
-
-
 
   // Solve inverse kinematics given the coordinates x and y, z, the desired gripping offset, tool angle and the list of lengths for the arm.
   // Note that for 3D movements, we use the solve2 method instead of solve.
@@ -197,45 +201,33 @@ void fabrik_loop() {
     Serial.print(z);
     Serial.print("\t");
   }
-  if (fabrik2D.solve2(x, y, z, -M_PI / 2.5, 0, lengths)) {
+  float a0, a1, a2, a3;
+  if (InverseK.solve(x, y, z, a0, a1, a2, a3)) {
     // Angles are printed in degrees.
     // The function calls below shows how easy it is to get the results from the inverse kinematics solution.
 
-    float base = convertToBraccioBase(fabrik2D.getBaseAngle());
-    float shoulder = convertToBraccioShoulder(fabrik2D.getAngle(0) * 57296 / 1000);
-    float elbow = convertToBraccioElbow(fabrik2D.getAngle(1) * 57296 / 1000);
-    float wristPitch = convertToBraccioWristPitch(fabrik2D.getAngle(2) * 57296 / 1000);
-
     if (isPrinting) {
-      Serial.print(base);
+      Serial.print(a0);
       Serial.print("\t");
-      Serial.print(shoulder);
+      Serial.print("b_base");
       Serial.print("\t");
-      Serial.print(elbow);
+      Serial.print(a1);
       Serial.print("\t");
-      Serial.print(wristPitch);
+      Serial.print("b_shoulder");
       Serial.print("\t");
-      Serial.print(fabrik2D.getX(0));
+      Serial.print(a2);
       Serial.print("\t");
-      Serial.print(fabrik2D.getY(0));
+      Serial.print("b_elbow");
       Serial.print("\t");
-      Serial.print(fabrik2D.getX(1));
+      Serial.print(a3);
       Serial.print("\t");
-      Serial.print(fabrik2D.getY(1));
-      Serial.print("\t");
-      Serial.print(fabrik2D.getX(2));
-      Serial.print("\t");
-      Serial.print(fabrik2D.getY(2));
-      Serial.print("\t");
-      Serial.print(fabrik2D.getX(3));
-      Serial.print("\t");
-      Serial.println(fabrik2D.getY(3));
+      Serial.print("b_wristPitch");
     }
 
-    Braccio.move(6).to(base);
-    Braccio.move(5).to(shoulder);
-    Braccio.move(4).to(elbow);
-    Braccio.move(3).to(wristPitch);
+    // Braccio.move(6).to(base);
+    // Braccio.move(5).to(shoulder);
+    // Braccio.move(4).to(elbow);
+    // Braccio.move(3).to(wristPitch);
 
   } else {
     Serial.println("Could not converge");
@@ -253,10 +245,10 @@ void fabrik_loop() {
   //   x--;
   // }
 
-  delay(2000);
+  delay(3000);
   i++;
-  if (i > amountOfLocations) {
-    isDone = true;
+  if (i >= amountOfLocations) {
+    i = 0;
   }
 }
 
@@ -273,11 +265,11 @@ void setup() {
     for (;;) {}
   }
 
-  fabrik_setup();
+  CGx_setup();
 
   Braccio.moveTo(home_position[0], home_position[1], home_position[2], home_position[3], home_position[4], home_position[5]);
   delay(1000);
-  Braccio.setAngularVelocity(45.0f); /* 45 deg/sec */
+  Braccio.setAngularVelocity(45.0f); /* 45 deg/sec , now i put it to 90 deg/sec */
 }
 
 void loop() {
@@ -287,6 +279,4 @@ void loop() {
     Braccio.move(4).to((SmartServoClass::MAX_ANGLE / 2.0f) + 45.0f);
     delay(2000);
   }
-
-  fabrik_loop();
 }
