@@ -65,8 +65,8 @@ float convertToBraccioBase(float angle) {
 float convertToBraccioShoulder(float angle) {
   float center = home_position[4];
   float fromZeroToCenter = angle + center;
-  float braccioMin = 75;  //from doc
-  float braccioMax = 232.23;
+  float braccioMin = 80;  //from doc
+  float braccioMax = 230;
   float clamped = fromZeroToCenter < braccioMin ? braccioMin : fromZeroToCenter;
   clamped = clamped > braccioMax ? braccioMax : clamped;
 
@@ -77,10 +77,12 @@ float convertToBraccioShoulder(float angle) {
 float convertToBraccioElbow(float angle) {
   float center = home_position[3];
   float fromZeroToCenter = angle + center;
-  float braccioMin = 47.33;
-  float braccioMax = 261.84;
+  float braccioMin = 62;
+  float braccioMax = 250;
   float clamped = fromZeroToCenter < braccioMin ? braccioMin : fromZeroToCenter;
   clamped = clamped > braccioMax ? braccioMax : clamped;
+  float braccioRange = 260 - 62;
+  float reversed = braccioRange - clamped;
   return clamped;
 }
 
@@ -88,10 +90,11 @@ float convertToBraccioElbow(float angle) {
 float convertToBraccioWristPitch(float angle) {
   float center = home_position[2];
   float fromZeroToCenter = angle + center;
-  float braccioMin = 38.35;
-  float braccioMax = 271.77;
+  float braccioMin = 45;
+  float braccioMax = 260;
   float clamped = fromZeroToCenter < braccioMin ? braccioMin : fromZeroToCenter;
   clamped = clamped > braccioMax ? braccioMax : clamped;
+
   return clamped;
 }
 
@@ -99,8 +102,8 @@ float convertToBraccioWristPitch(float angle) {
 float convertToBraccioWristRoll(float angle) {
   float center = home_position[1];
   float fromZeroToCenter = angle + center;
-  float braccioMin = 0;    //from doc
-  float braccioMax = 315;  //from doc
+  float braccioMin = 5;    //from doc
+  float braccioMax = 310;  //from doc
   float clamped = fromZeroToCenter < braccioMin ? braccioMin : fromZeroToCenter;
   clamped = clamped > braccioMax ? braccioMax : clamped;
   return clamped;
@@ -219,7 +222,7 @@ void getCommandsFrom(String anglesData) {
       Braccio.move(3).to(w);
       Serial.println("rotate some");
     }
-    //printAngles(b, s, e, w);
+    printAngles(b, s, e, w);
   } else {
     reset();
   }
@@ -435,7 +438,7 @@ void setup() {
   }
 
   reset();
-  Braccio.setAngularVelocity(135.0f); /* 45 deg/sec , now i put it to 90 deg/sec */
+  Braccio.setAngularVelocity(30.0f); /* 45 deg/sec , now i put it to 30 deg/sec for safety in dev*/
   delay(1000);
 }
 
