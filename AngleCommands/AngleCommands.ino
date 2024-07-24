@@ -36,7 +36,7 @@ int keyIndex = 0;
 int status = WL_IDLE_STATUS;
 WiFiServer server(80);
 
-
+bool emergencyStop = false;
 
 /**************************************************************************************
  * GLOBAL VARIABLES
@@ -65,8 +65,8 @@ float convertToBraccioBase(float angle) {
 float convertToBraccioShoulder(float angle) {
   float center = home_position[4];
   float fromZeroToCenter = angle + center;
-  float braccioMin = 80;  //from doc
-  float braccioMax = 230;
+  float braccioMin = 85;  //from doc
+  float braccioMax = 245;
   float clamped = fromZeroToCenter < braccioMin ? braccioMin : fromZeroToCenter;
   clamped = clamped > braccioMax ? braccioMax : clamped;
 
@@ -77,7 +77,7 @@ float convertToBraccioShoulder(float angle) {
 float convertToBraccioElbow(float angle) {
   float center = home_position[3];
   float fromZeroToCenter = angle + center;
-  float braccioMin = 62;
+  float braccioMin = 50;
   float braccioMax = 250;
   float clamped = fromZeroToCenter < braccioMin ? braccioMin : fromZeroToCenter;
   clamped = clamped > braccioMax ? braccioMax : clamped;
@@ -154,11 +154,11 @@ void customMenu() {
 // sets the arm back to home position (pointing straight up)
 void reset() {
   Braccio.moveTo(home_position[0], home_position[1], home_position[2], home_position[3], home_position[4], home_position[5]);
-  printAngles(home_position[5], home_position[4], home_position[3], home_position[2]);
+  printAngles(home_position[5], home_position[4], home_position[3], home_position[2], home_position[1]);
 }
 
 // prints every joint angle (base, shoulder, elbow, wrist pitch)
-void printAngles(float baseRotation, float shoulderRotation, float elbowRotation, float wristRotation) {
+void printAngles(float baseRotation, float shoulderRotation, float elbowRotation, float wristRotation, float wristRoll) {
   Serial.print("Base: ");
   Serial.print(baseRotation);
   Serial.print(" Shoulder: ");
@@ -166,7 +166,9 @@ void printAngles(float baseRotation, float shoulderRotation, float elbowRotation
   Serial.print(" Elbow: ");
   Serial.print(elbowRotation);
   Serial.print(" Wrist: ");
-  Serial.println(wristRotation);
+  Serial.print(wristRotation);
+  Serial.print(" WristRoll: ");
+  Serial.println(wristRoll);
 }
 
 // retrieves the degrees given with a joint letter, if no joint is found -1 is returned
@@ -191,11 +193,18 @@ int extractValue(char prefix, String data) {
  * Ex: 'A30' = slow, 'A45' = medium, 'A90' = fast, 'A180' = very fast (!warning!)
  */
 void getCommandsFrom(String anglesData) {
+  int emergencyStopV = extractValue('Q', anglesData);
+  if (emergencyStopV != -1) {
+    emergencyStop = true;
+  }
+  if (emergencyStop) { return; }
+
   // Extract individual values
   int baseRotation = extractValue('B', anglesData);
   int shoulderRotation = extractValue('S', anglesData);
   int elbowRotation = extractValue('E', anglesData);
   int wristRotation = extractValue('W', anglesData);
+  // int wristRoll = extractValue('T', anglesData);
 
   int resetValue = extractValue('R', anglesData);
   int angularVelocity = extractValue('A', anglesData);
@@ -210,19 +219,21 @@ void getCommandsFrom(String anglesData) {
     // Process the extracted values
     float b = baseRotation == -1 ? -1 : convertToBraccioBase(baseRotation);
     float s = shoulderRotation == -1 ? -1 : convertToBraccioShoulder(shoulderRotation);
-    float e = elbowRotation == -1 ? -1 : convertToBraccioElbow(elbowRotation);
-    float w = wristRotation == -1 ? -1 : convertToBraccioWristPitch(wristRotation);
+    float e = elbowRotation == -1 ? -1 : convertToBraccioElbow(elbowRotation-10);
+    float w = wristRotation == -1 ? -1 : convertToBraccioWristPitch(wristRotation+8);
+    float t = convertToBraccioWristRoll(-180); //== -1 ? -1 : convertToBraccioWristRoll(-180);
     if (baseRotation != -1 && shoulderRotation != -1 && elbowRotation != -1 && wristRotation != -1) {
-      Braccio.moveTo(-1, -1, w, e, s, b);
+      Braccio.moveTo(-1, t, w, e, s, b);
       Serial.println("rotate all");
     } else {
       Braccio.move(6).to(b);
       Braccio.move(5).to(s);
       Braccio.move(4).to(e);
       Braccio.move(3).to(w);
+      Braccio.move(2).to(t);
       Serial.println("rotate some");
     }
-    printAngles(b, s, e, w);
+    printAngles(b, s, e, w, t);
   } else {
     reset();
   }
@@ -430,7 +441,7 @@ void setup() {
   Serial.begin(115200);
   for (auto const start = millis(); !Serial && ((millis() - start) < 5000); delay(10)) {}
 
-  setupAP();
+  //setupAP();
 
   if (!Braccio.begin(customMenu)) {
     if (Serial) Serial.println("Braccio.begin() failed.");
@@ -438,6 +449,7 @@ void setup() {
   }
 
   reset();
+  Braccio.move(2).to(0);
   Braccio.setAngularVelocity(30.0f); /* 45 deg/sec , now i put it to 30 deg/sec for safety in dev*/
   delay(1000);
 }
